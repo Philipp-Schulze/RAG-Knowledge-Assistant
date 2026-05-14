@@ -4,7 +4,7 @@ Webanwendung, die Dokumente (PDF, DOCX, TXT) aufnimmt und auf Basis der Inhalte 
 Team
 
 Philipp Schulze
-Juan Claro Sanjinez
+Juan Claro Sanjinez // not anymore lol
 Michael Schäfer
 Richard Kaulen
 Constantin Salzer (Project Owner)
