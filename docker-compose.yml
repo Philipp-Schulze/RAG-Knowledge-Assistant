@@ -1,0 +1,105 @@
+services:
+  # --- Database ---
+  postgres:
+    image: ankane/pgvector:latest
+    container_name: rag_postgres
+    environment:
+      POSTGRES_DB: rag_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password123}
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./data/pg_data:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  # --- AI Engine (Ollama) ---
+  ollama:
+    image: ollama/ollama:latest
+    container_name: rag_ollama
+    volumes:
+      - ollama_storage:/root/.ollama
+    ports:
+      - "11434:11434"
+    # For Apple Silicon/Mac, GPU is handled by Docker Desktop automatically.
+    # If on Linux with NVIDIA, uncomment the deploy block below:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+  ollama-pull-models:
+    image: curlimages/curl:latest
+    container_name: ollama_pull_models
+    depends_on:
+      - ollama
+    entrypoint: /bin/sh
+    command:
+      - "-c"
+      - |
+        sleep 5;
+        echo "Downloading Embedding model..."
+        # Adding "stream": false makes curl wait for the full download
+        curl -X POST http://rag_ollama:11434/api/pull -d '{"name": "nomic-embed-text", "stream": false}'
+        
+        echo "Downloading Generation model..."
+        curl -X POST http://rag_ollama:11434/api/pull -d '{"name": "qwen2.5:1.5b", "stream": false}'
+        
+        echo "All models are now local. Exiting."
+        
+  # --- RAG Services ---
+  retrieval:
+    build:
+      context: .
+      dockerfile: services/retrieval/Dockerfile
+    container_name: rag_retrieval
+    env_file: .env
+    depends_on:
+      - postgres
+      - ollama
+
+  ingestion:
+    build:
+      context: .
+      dockerfile: services/ingestion/Dockerfile
+    container_name: rag_ingestion
+    env_file: .env
+    depends_on:
+      - postgres
+      - ollama
+
+  augmentation:
+    build:
+      context: .
+      dockerfile: services/augmentation/Dockerfile
+    container_name: rag_augmentation
+    env_file: .env
+    depends_on:
+      - ollama
+
+  generation:
+    build:
+      context: .
+      dockerfile: services/generation/Dockerfile
+    container_name: rag_generation
+    env_file: .env
+    depends_on:
+      - ollama
+
+  frontend:
+    build:
+      context: .
+      dockerfile: services/frontend/Dockerfile
+    container_name: rag_frontend
+    ports:
+      - "8501:8501"
+    env_file: .env
+    depends_on:
+      - retrieval
+
+volumes:
+  ollama_storage:
+  # pg_data is handled by your relative bind mount ./data/pg_data
