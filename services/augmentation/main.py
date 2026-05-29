@@ -2,12 +2,14 @@
 import os
 import json
 import requests
+import time
 from typing import List
 
 # Local workspace imports
 from schemas import Chunk
 
-# system prompt temmplates
+
+# 1. System Prompt Templates
 
 system_prompts = {
     "technical": (
@@ -27,7 +29,7 @@ system_prompts = {
     )
 }
 
-# example chunks
+# 2. Example Chunks
 
 example_chunks: List[Chunk] = [
     Chunk(
@@ -72,37 +74,58 @@ example_chunks: List[Chunk] = [
     )
 ]
 
-# helper local llm
+# 3. Helper: Tavily Search Crawler
+
+def _fetch_tavily_fallback_context(query: str) -> str:
+    api_key = os.getenv("TAVILY_API_KEY")
+    if not api_key:
+        print("[TAVILY] Warning: TAVILY_API_KEY not set. Skipping live web crawl.\n")
+        return ""
+
+    print(f"[TAVILY] Crawling live web via Tavily for: '{query}'...\n")
+    url = "https://api.tavily.com/search"
+    payload = {
+        "api_key": api_key,
+        "query": query,
+        "search_depth": "basic",            
+        "include_answer": False             
+    }
+
+    try:
+        response = requests.post(url, json=payload, timeout=60)
+        response.raise_for_status()
+        data = response.json()
+        
+        web_context = ""
+        results = data.get("results", [])
+        for i, res in enumerate(results[:3]): 
+            web_context += f"Web Source {i+1}: {res.get('title')}\nURL: {res.get('url')}\nContent: {res.get('content')}\n\n"
+            
+        return web_context
+    except Exception as e:
+        print(f"[TAVILY] Tavily crawl failed: {e}\n")
+        return ""
+
+# 4. Helper: Request Builders
 
 def _prepare_local_request(query: str, context: str, system_prompt: str):
-    
-    # local ollama
     base_url = os.getenv("OLLAMA_BASE_URL", "http://rag_ollama:11434")
     url = f"{base_url.rstrip('/')}/api/generate"
     
-    # prepare payload
     full_prompt = f"System: {system_prompt}\n\nKontext:\n{context}\nNutzer Frage: {query}\nAntwort:"
     payload = {
         "model": os.getenv("GENERATION_MODEL", "qwen2.5:1.5b"),
         "prompt": full_prompt,
-        "stream": True 
+        "stream": True,
+        "keep_alive": "10m"         # keeps model in memory for 10min, better speed
     }
-
-    # return url, payload, headers
     return url, payload, {"Content-Type": "application/json"}
 
-# helper api llm
-
 def _prepare_api_request(query: str, context: str, system_prompt: str):
-    
-    # gemini cloud api    
     api_key = os.getenv("GEMINI_API_KEY")
-
-    # error handling for missing API key
     if not api_key:
         raise ValueError("GEMINI_API_KEY environment variable is not set!")
-
-    # prepare request details    
+        
     url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -116,17 +139,49 @@ def _prepare_api_request(query: str, context: str, system_prompt: str):
         ],
         "stream": True
     }
-
-    # return results for API request
     return url, payload, headers
 
-# parsing helper for streaming responses
+# 5. LLM Sufficiency Evaluator
+def _is_context_sufficient(query: str, context: str, mode: str) -> bool:
+    eval_prompt = (
+        "Analysiere, ob der bereitgestellte Kontext ausreicht, um die Frage des Nutzers wahrheitsgemäß zu beantworten.\n"
+        "Antworte AUSSCHLIESSLICH mit dem Wort 'JA' oder 'NEIN'. Keine Begründung!\n\n"
+        f"Kontext:\n{context}\n\n"
+        f"Nutzer Frage: {query}\n"
+        "Ausreichend?"
+    )
+    
+    try:
+        # Step A: Safely get request configurations
+        if mode.lower() == "api":
+            url, payload, headers = _prepare_api_request(query="", context="", system_prompt="")
+            payload["messages"] = [{"role": "user", "content": eval_prompt}]
+            payload["stream"] = False
+        else:
+            url, payload, headers = _prepare_local_request(query="", context="", system_prompt="")
+            payload["prompt"] = eval_prompt
+            payload["stream"] = False
+
+        # Step B: Execute non-streaming transaction
+        response = requests.post(url, json=payload, headers=headers, timeout=30)
+        response.raise_for_status()
+        
+        if mode.lower() == "api":
+            result = response.json()["choices"][0]["message"]["content"].strip().upper()
+        else:
+            result = response.json().get("response", "").strip().upper()
+
+        print(f"[EVALUATOR] Context sufficient according to LLM? {result}\n")
+        return "JA" in result
+        
+    except Exception as e:
+        print(f"[EVALUATOR] Sufficiency evaluation failed: {e}. Defaulting to True.\n")
+        return True
+
+# 6. Parsing Helper for Streaming Responses
 
 def _parse_stream_line(line_text: str, mode: str) -> str:
-
-    # api mode
     if mode == "api":
-
         if line_text.startswith("data: "):
             line_text = line_text[6:]
         if line_text == "[DONE]" or not line_text:
@@ -136,62 +191,101 @@ def _parse_stream_line(line_text: str, mode: str) -> str:
         choices = chunk_json.get("choices", [])
         if choices:
             return choices[0].get("delta", {}).get("content", "")
-    
-    # local mode
     else:
         chunk_json = json.loads(line_text)
         return chunk_json.get("response", "")
     return ""
 
-# main orchestrator function
-def generate_rag_response(query: str, chunks: List[Chunk], style: str = "technical", mode: str = "local") -> str:
+# 7. Main Orchestrator Function
 
-    # prepare inputs 
+import time  # 1. Don't forget to import time!
+
+def generate_rag_response(query: str, chunks: List[Chunk], style: str = "technical", mode: str = "local") -> str:
+    
+    # Capture start time
+    total_start = time.time() 
+    
+    # generate prompt and context
     system_prompt = system_prompts.get(style, system_prompts["technical"])
     context = "".join([f"Document: {c.file_name} (Author: {c.author})\nContent: {c.content}\n\n" for c in chunks])
 
+    # Evaluation Time
+    eval_start = time.time()
+    needs_tavily = not _is_context_sufficient(query, context, mode)
+    eval_time = time.time() - eval_start
+
+    # Fetching Time
+    fetch_time = 0
+
+    if needs_tavily:
+        fetch_start = time.time()
+        print("[TAVILY] Local context insufficient! Activating live internet crawling...\n")
+        web_context = _fetch_tavily_fallback_context(query)
+        fetch_time = time.time() - fetch_start
+        
+        if web_context:
+            print("[TAVILY] Web metadata injected into generation pipeline.\n")
+            context = web_context
+        else:
+            print("[TAVILY] Web crawl found nothing.\n")
+            context = "Keine Dokumente oder Web-Daten vorhanden."
+
     try:
-        # Step 1: delegate to api or local
         if mode.lower() == "api":
-            print("Routing request to Google Gemini API (gemini-2.5-flash)...")
+            print("[API] Routing request to Cloud API...\n")
             url, payload, headers = _prepare_api_request(query, context, system_prompt)
         else:
-            print("Routing request to local Ollama container...")
+            print("[LOCAL] Routing request to local Ollama container...\n")
             url, payload, headers = _prepare_local_request(query, context, system_prompt)
             
-        # Step 2: execute request
-        response = requests.post(url, json=payload, headers=headers, timeout=30, stream=True)
+        gen_start = time.time() # Start clock for LLM generation
+        response = requests.post(url, json=payload, headers=headers, timeout=60, stream=True)
         response.raise_for_status()
         
-        print(f"--- Response ({mode.upper()} - {style.upper()} Mode) ---")
+        print(f"--- RESPONSE ({mode.upper()} - {style.upper()} MODE) ---\n")
         
-        # Step 3: Stream and parse on the fly
         for line in response.iter_lines():
             if line:
-                text_piece = _parse_stream_line(line.decode('utf-8').strip(), mode.lower())
+                decoded_line = line.decode('utf-8', errors='replace').strip()
+                text_piece = _parse_stream_line(decoded_line, mode.lower())
                 if text_piece:
                     print(text_piece, end="", flush=True)
         
+        gen_time = time.time() - gen_start # Generation/Stream duration
+        
+        # final time output
+        total_duration = time.time() - total_start
+        print("\n\n")
+        print(f"[PERFORMANCE] Eval: {eval_time:.2f}s | Fetch: {fetch_time:.2f}s | Gen: {gen_time:.2f}s")
+        print(f"[PERFORMANCE] Total Execution Time: {total_duration:.2f}s")
         print("\n")
+        
         return "Streaming complete."
         
     except Exception as e:
         return f"Error contacting {mode.upper()} LLM: {e}"
 
 
+# test run
 if __name__ == "__main__":
-    
-    # testing configuration variables
-    test_query = "Erkläre den Begriff RAG?"
-    test_style = "defensive"                            # defensive, technical, creative
-    test_mode = "local"                                 # api, local
+    test_query = "Erkläre den Begriff RAG?"         # choose any question, current chunks are regarding RAG
+    test_style = "creative"                        # defensive, technical, creative        
+    test_mode = "local"                               # local, api             
 
-    print(f"Asking LLM ({test_style.upper()} Mode) via {test_mode.upper()} engine: {test_query}\n")
+    print(f"[INPUT] Asking LLM ({test_style.upper()} Mode) via {test_mode.upper()} engine: {test_query}\n")
     
-    # Run the slim orchestrator
     generate_rag_response(
         query=test_query, 
         chunks=example_chunks, 
         style=test_style,
         mode=test_mode
     )
+
+# interrupt output
+
+try:
+    if __name__ == "__main__":
+        generate_rag_response(...)
+except KeyboardInterrupt:
+    print("\n\n[INFO] Process interrupted by user. Exiting cleanly.")
+    exit(0)

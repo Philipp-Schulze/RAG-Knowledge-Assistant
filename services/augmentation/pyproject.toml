@@ -4,12 +4,14 @@ name = "augmentation"
 version = "0.1.0"
 dependencies = [
     "shared",
-    "openai",
-    "langchain",
     "requests",
 ]
+
+# Legacy framework dependencies kept for presentation notes:
+# unused_dependencies = ["openai", "langchain"]
+
 [tool.uv.sources]
-shared = { workspace = true } # Keep it clean and cloud-ready
+shared = { workspace = true }
 
 [build-system]
 requires = ["setuptools>=61.0"]
