@@ -77,7 +77,7 @@ example_chunks: List[Chunk] = [
 ]
 
 # 3. function rag response with dynamic system prompt injection
-def generate_rag_response(query: str, chunks: List[Chunk], style: str = "technical") -> str:
+def generate_rag_response(query: str, chunks: List[Chunk], style: str = "technical", mode: str = "local") -> str:
 
     # Fallback to technical if an invalid style is passed
     system_prompt = system_prompts.get(style, system_prompts["technical"])
@@ -124,8 +124,8 @@ def generate_rag_response(query: str, chunks: List[Chunk], style: str = "technic
 if __name__ == "__main__":
     
     # testing temp vars
-    test_query = "Was ist Retrieval-Augmented Generation?"
-    test_style = "technical"  
+    test_query = "Wann endete der zweite Weltkrieg?"
+    test_style = "defensive"  
 
     print(f"Asking LLM ({test_style.upper()} Mode): {test_query}\n")
     
