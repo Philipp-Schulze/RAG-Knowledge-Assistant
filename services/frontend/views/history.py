@@ -1,8 +1,9 @@
 import streamlit as st
 
+PAGE_KEY = "history"
 PAGE_NAME = "Chat History"
 PAGE_PATH = "/views/chat_history.py"
-PGAE_ICON = "📜"
+PAGE_ICON = "⏳"
 
 def render_history():
     st.title("Chat History")
