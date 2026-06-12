@@ -69,7 +69,14 @@ services:
       context: .
       dockerfile: services/augmentation/Dockerfile
     container_name: rag_augmentation
+    volumes:
+      - ./services/augmentation:/app/services/augmentation
+      - ./shared:/app/shared
+    ports:
+      - "8000:8000"
     env_file: .env
+    environment:
+      - PYTHONPATH=/app/services/augmentation
     depends_on:
       - ollama
 
