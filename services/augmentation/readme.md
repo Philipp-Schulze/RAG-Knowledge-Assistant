@@ -19,8 +19,8 @@ docker compose run --rm augmentation python main.py
 
 inputs:
 
-- query, mode, style from frontend
-- chunks from vector database / reranker
+- frontend: query, style (tech, creative, defensive teomplate), resp length (max token), mode local/api
+- reranker: top k chunks
 
 output:
 
