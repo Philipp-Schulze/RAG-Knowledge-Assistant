@@ -6,7 +6,7 @@ import time
 from typing import List
 
 # Local workspace imports
-from schemas import Chunk
+from shared.schemas import Chunk
 
 
 # 1. System Prompt Templates

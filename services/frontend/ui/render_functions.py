@@ -14,39 +14,33 @@ def render_user_message(message_content, message_index, message_time):
             unsafe_allow_html=True
         )
 
-        spacer_col, time_col, button_col = st.columns([7, 1, 1])
+        spacer_col, time_col, copy_col, rerun_col = st.columns([6, 1, 1, 1])
 
         with time_col:
             st.caption(message_time)
 
-        with button_col:
+        with copy_col:
             if st.button("⧉", key=f"copy_user_message_{message_index}"):
                 st.session_state.copied_user_message = message_content
                 st.toast("Nachricht kopiert")
 
-def render_assistant_message(message_content):
+        with rerun_col:
+            if st.button("↻", key=f"rerun_user_message_{message_index}"):
+                st.session_state.rerun_query = message_content
+                st.rerun()
 
-    st.markdown(
-        f"""
-        <div class='chat-assistant-box'>
-            <div class='chat-assistant-bubble'>
-                {message_content}
-            </div>
-        </div>""",
-        unsafe_allow_html=True
-    )
+def render_assistant_message(message_content, message_index):
+
+    with st.container(key=f"chat_assistant_box_{message_index}"):
+        st.markdown(message_content)
 
 def render_chunk_message(chunk, message_index, chunk_index):
     file_name = chunk.file_name
     author = chunk.author
     confidence_score = chunk.confidence_score
-    content = chunk.content
-
-    title = f"{file_name} | {author} | Score: {confidence_score}"
 
     with st.container(key=f"chat_chunk_container_{message_index}_{chunk_index}"):
-        with st.expander(title, expanded=False):
-            st.write(content)
+        st.caption(f"{file_name} | {author} | Score: {confidence_score}")
 
 def render_assistant_actions(message_index, message_time, message_content, has_chunks=False):
     sources_key = f"show_sources_assistant_message_{message_index}"
@@ -90,26 +84,47 @@ def render_chat_settings_panel():
 
     chat_settings = st.session_state.chat_settings
 
-    top_k = st.slider(
-        "Top-K Chunks",
-        chat_settings.MIN_TOP_K,
-        chat_settings.MAX_TOP_K,
-        value=chat_settings.top_k,
-        key="chat_settings_top_k"
+    role_options = ["technical", "creative", "defensive", "concise", "detailed"]
+    provider_options = ["local", "api"]
+    mode_options = ["fast", "complex"]
+
+    role = st.selectbox(
+        "Rolle",
+        role_options,
+        index=role_options.index(chat_settings.role),
+        key="chat_settings_role"
     )
 
-    selected_llm = st.selectbox(
-        "LLM",
-        chat_settings.LLM_OPTIONS,
-        index=chat_settings.LLM_OPTIONS.index(chat_settings.llm),
-        key="chat_settings_llm"
+    provider = st.selectbox(
+        "Provider",
+        provider_options,
+        index=provider_options.index(chat_settings.provider),
+        key="chat_settings_provider"
     )
 
-    prompting_strategy = st.selectbox(
-        "Prompting Strategy",
-        chat_settings.PROMPT_STRATEGIES,
-        index=chat_settings.PROMPT_STRATEGIES.index(chat_settings.prompting_strategy),
-        key="chat_settings_prompting_strategy"
+    mode = st.selectbox(
+        "Modus",
+        mode_options,
+        index=mode_options.index(chat_settings.mode),
+        key="chat_settings_mode"
+    )
+
+    threshold = st.slider(
+        "Confidence Threshold",
+        min_value=0.0,
+        max_value=5.0,
+        value=chat_settings.threshold,
+        step=0.1,
+        key="chat_settings_threshold"
+    )
+
+    max_tokens = st.slider(
+        "Max Tokens",
+        min_value=100,
+        max_value=2000,
+        value=chat_settings.max_tokens,
+        step=50,
+        key="chat_settings_max_tokens"
     )
 
     if st.button(
@@ -118,9 +133,11 @@ def render_chat_settings_panel():
         type="primary"
     ):
 
-        chat_settings.top_k = top_k
-        chat_settings.llm = selected_llm
-        chat_settings.prompting_strategy = prompting_strategy
+        chat_settings.role = role
+        chat_settings.provider = provider
+        chat_settings.mode = mode
+        chat_settings.threshold = threshold
+        chat_settings.max_tokens = max_tokens
 
         st.success("Settings applied!")
     
@@ -153,13 +170,5 @@ def render_chat_history_preview(conversation):
                     )
 
             elif role == "assistant":
-                st.markdown(
-                    f"""
-                    <div class='chat-assistant-box'>
-                        <div class='chat-assistant-bubble'>
-                            {content}
-                        </div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
+                with st.container(key=f"history_assistant_box_{conversation_id}_{message_index}"):
+                    st.markdown(content)

@@ -8,7 +8,7 @@ from ui.render_functions import (
     render_chat_settings_panel,
 )
 from ui.css_styling import load_chat_styles
-from schemas import ChatConversation, ChatMessage, ChatSettings
+from shared.schemas import ChatConversation, ChatMessage, Settings
 from services.backend_client import BackendClient
 from services.frontend_actions import create_conversation_title_from_message
 
@@ -42,7 +42,7 @@ def init_session_state():
         st.session_state.current_chat_conversation = ChatConversation.create_new()
     
     if "chat_settings" not in st.session_state:
-        st.session_state.chat_settings = ChatSettings()
+        st.session_state.chat_settings = Settings()
     
 
 # Rendert den Chat-Header mit dem Titel und einem Button, der die Chat-Einstellungen öffnet
@@ -76,7 +76,7 @@ def render_conversation():
             )
 
         elif message.role == "assistant":
-            render_assistant_message(message.content)
+            render_assistant_message(message.content, message_index)
 
             show_sources = render_assistant_actions(
                 message_index,
@@ -96,6 +96,10 @@ def handle_user_input():
 
     user_input = st.chat_input("Type your message here...")
 
+    rerun_query = st.session_state.pop("rerun_query", None)
+    if rerun_query:
+        user_input = rerun_query
+
     if user_input:
 
         if st.session_state.current_chat_conversation.title == "Neuer Chat":
@@ -110,21 +114,18 @@ def handle_user_input():
             )
         )
 
-        # Anfrage an FastAPI senden
+        # Anfrage an den Augmentation-Service senden
         backend_client = BackendClient()
         response = backend_client.send_chat_message(
             user_input,
             st.session_state.chat_settings
         )
 
-        ai_response = response.get("response")
-        chunks = response.get("chunks", [])
-
         st.session_state.current_chat_conversation.messages.append(
             ChatMessage(
                 role="assistant",
-                content=ai_response,
-                chunks=chunks,
+                content=response.answer,
+                chunks=response.source_documents,
                 created_at=datetime.now().isoformat(timespec="seconds")
             )
         )

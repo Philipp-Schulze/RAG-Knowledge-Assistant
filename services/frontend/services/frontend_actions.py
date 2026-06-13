@@ -1,6 +1,6 @@
 import streamlit as st
 
-from schemas import ChatConversation
+from shared.schemas import ChatConversation
 from services.backend_client import BackendClient
 
 

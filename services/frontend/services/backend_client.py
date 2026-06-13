@@ -1,47 +1,47 @@
+import os
+
 import requests # Externe Bibliothek für HTTP-Anfragen
 
-# Zuständige Klasse für die Kommunikation mit dem Backend (sauberes Kapseln)
+from shared.schemas import ChatRequest, ChatResponse, Settings
+
+
+# Zuständige Klasse für die Kommunikation mit Augmentation- und Backend-Service (sauberes Kapseln)
 class BackendClient:
 
-    # Konstruktor, der die Basis-URL des Backends festlegt (hier lokal auf Port 8000)
+    # Konstruktor, der die Basis-URLs der Services festlegt (per ENV überschreibbar fürs Docker-Netzwerk)
     def __init__(self):
 
-        self.base_url = "http://127.0.0.1:8000"
+        self.augmentation_url = os.environ.get("AUGMENTATION_URL", "http://127.0.0.1:8000")
+        self.backend_url = os.environ.get("BACKEND_URL", "http://127.0.0.1:8001")
 
-    # Funktion, die eine Chat-Nachricht des Benutzers (= message) an das Backend sendet 
-    def send_chat_message(self, message, chat_settings):
+    # Sendet eine Chat-Nachricht des Benutzers (= query) an den Augmentation-Service und liefert die ChatResponse
+    def send_chat_message(self, query: str, settings: Settings) -> ChatResponse:
 
-        # POST-Anfrage an den /chat-Endpunkt des Backends mit JSON-Daten
+        request = ChatRequest(query=query, settings=settings)
+
         response = requests.post(
-            f"{self.base_url}/chat",
-            json={
-                "message": message,
-                "chat_settings": {
-                    "top_k": chat_settings.top_k,
-                    "llm": chat_settings.llm,
-                    "prompting_strategy": chat_settings.prompting_strategy
-                }
-            }
+            f"{self.augmentation_url}/augment",
+            json=request.model_dump()
         )
 
         response.raise_for_status()
-        return response.json()
-    
+        return ChatResponse.model_validate(response.json())
+
     # Erhält gespeicherte Chat-Konversationen aus dem Backend
     def get_chat_conversations(self):
 
         response = requests.get(
-            f"{self.base_url}/chat-conversations"
+            f"{self.backend_url}/chat-conversations"
         )
 
         response.raise_for_status()
         return response.json()
-    
+
     # Speichert eine Konversation und gibt diese ans Backend weiter
     def save_chat_conversation(self, chat_conversation):
 
         response = requests.put(
-            f"{self.base_url}/chat-conversations/{chat_conversation.id}",
+            f"{self.backend_url}/chat-conversations/{chat_conversation.id}",
             json=chat_conversation.model_dump()
         )
 

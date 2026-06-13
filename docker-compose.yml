@@ -80,6 +80,17 @@ services:
     depends_on:
       - ollama
 
+  backend:
+    build:
+      context: .
+      dockerfile: services/backend/Dockerfile
+    container_name: rag_backend
+    ports:
+      - "8001:8000"
+    env_file: .env
+    depends_on:
+      - postgres
+
   generation:
     build:
       context: .
@@ -97,8 +108,13 @@ services:
     ports:
       - "8501:8501"
     env_file: .env
+    environment:
+      - AUGMENTATION_URL=http://rag_augmentation:8000
+      - BACKEND_URL=http://rag_backend:8000
     depends_on:
       - retrieval
+      - augmentation
+      - backend
 
 volumes:
   ollama_storage:

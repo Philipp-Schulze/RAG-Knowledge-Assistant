@@ -1,6 +1,6 @@
 # Location: shared/schemas.py
 from datetime import datetime
-from typing import ClassVar, List, Literal, Optional
+from typing import List, Literal, Optional
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
@@ -13,7 +13,7 @@ class Chunk(BaseModel):
     content: str                        # "Machine learning is a subset of ..."
 
 class Settings(BaseModel):
-    max_tokens: int = Field(default=500, ge=1000, le=2000)       # 500
+    max_tokens: int = Field(default=500, ge=1, le=2000)          # 500
     role: str = "technical"                                     # "technical", "concise", "detailed"
     provider: str = "local"                                     # "local" (Ollama), "api" (Gemini API)
     mode: str = "fast"                                          # "fast", "complex"
@@ -42,7 +42,7 @@ class ChatMessage(BaseModel):
     role: Literal["user", "assistant"]
     content: str
     created_at: str
-    chunks: Optional[List[Chunk]] = None
+    chunks: Optional[List[SourceReference]] = None
 
 
 class ChatConversation(BaseModel):
@@ -62,15 +62,3 @@ class ChatConversation(BaseModel):
             created_at=now,
             updated_at=now
         )
-
-
-class ChatSettings(BaseModel):
-    top_k: int = 5
-    llm: str = "GPT-4"
-    prompting_strategy: str = "Standard RAG"
-
-    MIN_TOP_K: ClassVar[int] = 1
-    MAX_TOP_K: ClassVar[int] = 20
-
-    LLM_OPTIONS: ClassVar[list[str]] = ["GPT-4", "Llama 3", "Mistral"]
-    PROMPT_STRATEGIES: ClassVar[list[str]] = ["Standard RAG", "Chain of Thought", "Concise"]
