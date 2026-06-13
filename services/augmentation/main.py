@@ -1,11 +1,9 @@
-# Standard Imports
 import os
 import json
 import requests
 import time
 from typing import List
 
-# Local workspace imports
 from shared.schemas import Chunk
 
 
@@ -152,7 +150,6 @@ def _is_context_sufficient(query: str, context: str, mode: str) -> bool:
     )
     
     try:
-        # Step A: Safely get request configurations
         if mode.lower() == "api":
             url, payload, headers = _prepare_api_request(query="", context="", system_prompt="")
             payload["messages"] = [{"role": "user", "content": eval_prompt}]
@@ -162,7 +159,6 @@ def _is_context_sufficient(query: str, context: str, mode: str) -> bool:
             payload["prompt"] = eval_prompt
             payload["stream"] = False
 
-        # Step B: Execute non-streaming transaction
         response = requests.post(url, json=payload, headers=headers, timeout=30)
         response.raise_for_status()
         
@@ -199,20 +195,16 @@ def _parse_stream_line(line_text: str, mode: str) -> str:
 # 7. Main Orchestrator Function
 
 def generate_rag_response(query: str, chunks: List[Chunk], style: str = "technical", mode: str = "local") -> str:
-    
-    # Capture start time
-    total_start = time.time() 
-    
-    # generate prompt and context
+
+    total_start = time.time()
+
     system_prompt = system_prompts.get(style, system_prompts["technical"])
     context = "".join([f"Document: {c.file_name} (Author: {c.author})\nContent: {c.content}\n\n" for c in chunks])
 
-    # Evaluation Time
     eval_start = time.time()
     needs_tavily = not _is_context_sufficient(query, context, mode)
     eval_time = time.time() - eval_start
 
-    # Fetching Time
     fetch_time = 0
 
     if needs_tavily:
@@ -236,7 +228,7 @@ def generate_rag_response(query: str, chunks: List[Chunk], style: str = "technic
             print("[LOCAL] Routing request to local Ollama container...\n")
             url, payload, headers = _prepare_local_request(query, context, system_prompt)
             
-        gen_start = time.time() # Start clock for LLM generation
+        gen_start = time.time()
         response = requests.post(url, json=payload, headers=headers, timeout=60, stream=True)
         response.raise_for_status()
         
@@ -249,9 +241,8 @@ def generate_rag_response(query: str, chunks: List[Chunk], style: str = "technic
                 if text_piece:
                     print(text_piece, end="", flush=True)
         
-        gen_time = time.time() - gen_start # Generation/Stream duration
-        
-        # final time output
+        gen_time = time.time() - gen_start
+
         total_duration = time.time() - total_start
         print("\n\n")
         print(f"[PERFORMANCE] Eval: {eval_time:.2f}s | Fetch: {fetch_time:.2f}s | Gen: {gen_time:.2f}s")
@@ -264,7 +255,6 @@ def generate_rag_response(query: str, chunks: List[Chunk], style: str = "technic
         return f"Error contacting {mode.upper()} LLM: {e}"
 
 
-# test run
 if __name__ == "__main__":
     test_query = "Erkläre den Begriff RAG?"                     # choose any question, current chunks are regarding RAG
     test_style = "defensive"                                    # defensive, technical, creative        

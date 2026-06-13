@@ -288,8 +288,7 @@ def load_history_styles():
 
 def load_sidebar_styles():
 
-    # Mit markdown wird ein Style-Tag in die Seite eingebettet, der die Breite der Sidebar anpasst.
-    # Die Sidebar selbst besteht aus mehreren "HTML-Elementen", die alle angepasst werden müssen (daher die zwei Selektoren).
+    # Passt die Sidebar-Breite an; zwei Selektoren, da sie aus mehreren HTML-Elementen besteht
     st.markdown(
         """
         <style>

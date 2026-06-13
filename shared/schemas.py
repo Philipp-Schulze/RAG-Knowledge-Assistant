@@ -1,4 +1,3 @@
-# Location: shared/schemas.py
 from datetime import datetime
 from typing import List, Literal, Optional
 from uuid import uuid4
@@ -19,10 +18,8 @@ class Settings(BaseModel):
     mode: str = "fast"                                          # "fast", "complex"
     threshold: float = 4.0                                      # 4.0
 
-class ChatRequest(BaseModel):
-
-    query: str                                                  # "Was ist RAG?"
-    settings: Settings = Field(default_factory=Settings)        # Optional settings with defaults
+# Maximum number of previous messages (user+assistant) sent to /augment as conversation history
+MAX_HISTORY_MESSAGES = 6
 
 class SourceReference(BaseModel):
 
@@ -30,19 +27,30 @@ class SourceReference(BaseModel):
     author: str                     # "John Doe"
     confidence_score: float         # 0.0 - 5.0
 
+class ChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
+    created_at: str
+    chunks: Optional[List[SourceReference]] = None
+    needs_confirmation: bool = False    # True if this assistant message is asking whether to search the web
+    used_web_search: bool = False       # True if this assistant message's content came from a web search
+    tokens_used: int = 0                # Token count of the LLM's response only (not context/prompt)
+
+class ChatRequest(BaseModel):
+
+    query: str                                                  # "Was ist RAG?"
+    settings: Settings = Field(default_factory=Settings)        # Optional settings with defaults
+    history: List[ChatMessage] = Field(default_factory=list)    # Previous turns of the conversation (most recent last)
+    confirm_web_search: bool = False                            # User confirmed: search the web for this query
+
 class ChatResponse(BaseModel):
 
     answer: str                                 # "RAG steht für ..."
     tokens_used: int                            # 450
     source_documents: List[SourceReference]     # [SourceReference(file_name="machine_learning_basics.pdf", author="John Doe", confidence_score=4.5)]
     aggregated_confidence: float                # 0.0 - 5.0
-
-
-class ChatMessage(BaseModel):
-    role: Literal["user", "assistant"]
-    content: str
-    created_at: str
-    chunks: Optional[List[SourceReference]] = None
+    needs_confirmation: bool = False            # True: nothing found in the knowledge base, ask the user whether to search the web
+    used_web_search: bool = False               # True: this answer was generated using web search results
 
 
 class ChatConversation(BaseModel):

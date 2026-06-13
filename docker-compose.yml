@@ -14,35 +14,9 @@ services:
       - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
 
   # --- AI Engine (Ollama) ---
-  ollama:
-    image: ollama/ollama:latest
-    container_name: rag_ollama
-    volumes:
-      - ollama_storage:/root/.ollama
-    ports:
-      - "11434:11434"
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        # 1. Start Ollama in the background
-        ollama serve &
-        
-        # 2. Wait for the server to be ready
-        echo "Waiting for Ollama to start..."
-        until ollama list > /dev/null 2>&1; do
-          sleep 2
-        done
-        
-        # 3. Pull the models
-        echo "Pulling models..."
-        ollama pull nomic-embed-text
-        ollama pull qwen2.5:1.5b
-        ollama pull qwen2.5:7b
-        echo "All models downloaded."
-        
-        # 4. Bring the background process to the foreground to keep the container running
-        wait $!
-        
+  # Ollama runs natively on the host for Metal/GPU acceleration (see CLAUDE.md).
+  # Containers reach it via OLLAMA_URL=http://host.docker.internal:11435 (set in .env).
+
   # --- RAG Services ---
   retrieval:
     build:
@@ -52,7 +26,6 @@ services:
     env_file: .env
     depends_on:
       - postgres
-      - ollama
 
   ingestion:
     build:
@@ -62,7 +35,6 @@ services:
     env_file: .env
     depends_on:
       - postgres
-      - ollama
 
   augmentation:
     build:
@@ -77,8 +49,6 @@ services:
     env_file: .env
     environment:
       - PYTHONPATH=/app/services/augmentation
-    depends_on:
-      - ollama
 
   backend:
     build:
@@ -97,8 +67,6 @@ services:
       dockerfile: services/generation/Dockerfile
     container_name: rag_generation
     env_file: .env
-    depends_on:
-      - ollama
 
   frontend:
     build:
@@ -116,6 +84,4 @@ services:
       - augmentation
       - backend
 
-volumes:
-  ollama_storage:
-  # pg_data is handled by your relative bind mount ./data/pg_data
+# pg_data is handled by your relative bind mount ./data/pg_data

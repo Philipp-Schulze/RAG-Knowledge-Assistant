@@ -1,8 +1,9 @@
 import os
+from typing import List
 
-import requests # Externe Bibliothek für HTTP-Anfragen
+import requests
 
-from shared.schemas import ChatRequest, ChatResponse, Settings
+from shared.schemas import ChatMessage, ChatRequest, ChatResponse, Settings
 
 
 # Zuständige Klasse für die Kommunikation mit Augmentation- und Backend-Service (sauberes Kapseln)
@@ -15,9 +16,9 @@ class BackendClient:
         self.backend_url = os.environ.get("BACKEND_URL", "http://127.0.0.1:8001")
 
     # Sendet eine Chat-Nachricht des Benutzers (= query) an den Augmentation-Service und liefert die ChatResponse
-    def send_chat_message(self, query: str, settings: Settings) -> ChatResponse:
+    def send_chat_message(self, query: str, settings: Settings, history: List[ChatMessage] = None, confirm_web_search: bool = False) -> ChatResponse:
 
-        request = ChatRequest(query=query, settings=settings)
+        request = ChatRequest(query=query, settings=settings, history=history or [], confirm_web_search=confirm_web_search)
 
         response = requests.post(
             f"{self.augmentation_url}/augment",

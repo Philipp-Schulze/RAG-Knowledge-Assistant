@@ -29,10 +29,18 @@ def render_user_message(message_content, message_index, message_time):
                 st.session_state.rerun_query = message_content
                 st.rerun()
 
-def render_assistant_message(message_content, message_index):
+def render_assistant_message(message_content, message_index, used_web_search=False):
 
     with st.container(key=f"chat_assistant_box_{message_index}"):
         st.markdown(message_content)
+
+        if used_web_search:
+            st.caption("🌐 Diese Antwort basiert auf einer Websuche und nicht auf der Wissensbasis.")
+
+def render_web_search_confirmation(message_index):
+
+    with st.container(key=f"web_search_confirmation_container_{message_index}"):
+        return st.button("🌐 Im Web suchen", key=f"confirm_web_search_{message_index}")
 
 def render_chunk_message(chunk, message_index, chunk_index):
     file_name = chunk.file_name
@@ -42,7 +50,7 @@ def render_chunk_message(chunk, message_index, chunk_index):
     with st.container(key=f"chat_chunk_container_{message_index}_{chunk_index}"):
         st.caption(f"{file_name} | {author} | Score: {confidence_score}")
 
-def render_assistant_actions(message_index, message_time, message_content, has_chunks=False):
+def render_assistant_actions(message_index, message_time, message_content, has_chunks=False, tokens_used=0):
     sources_key = f"show_sources_assistant_message_{message_index}"
 
     if sources_key not in st.session_state:
@@ -53,7 +61,7 @@ def render_assistant_actions(message_index, message_time, message_content, has_c
         time_col, copy_col, thumbs_up_col, thumbs_down_col, sources_col, spacer_col = st.columns([1.3, 1, 1, 1, 2.4, 6.6])
 
         with time_col:
-            st.caption(message_time)
+            st.caption(f"{message_time} · {tokens_used} Tokens" if tokens_used else message_time)
         
         with copy_col:
             if st.button("⧉", key=f"copy_assistant_message_{message_index}"):

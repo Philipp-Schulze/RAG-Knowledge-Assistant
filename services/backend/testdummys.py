@@ -43,7 +43,7 @@ example_sources: List[SourceReference] = [
     ),
 ]
 
-# Beispiel Konversationen zum Testen der Chat-Konversations-Funktionalitätq
+# Beispiel Konversationen zum Testen der Chat-Konversations-Funktionalität
 example_chat_conversations: list[ChatConversation] = [
     ChatConversation(
         id="7f7d8f91-6d2e-44f1-8df2-34e62dc2c3b7",

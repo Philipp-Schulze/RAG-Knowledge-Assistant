@@ -72,8 +72,7 @@ def render_chat_history_group(group_title, conversations):
         render_chat_history_item(conversation)
 
 
-# Rendert jeden einzelnen Chatverlauf als Item in der Historie: Zeigt Titel, Aktualisierungszeitpunkt 
-# und Buttons zum Laden der Konversation bzw. Anzeigen einer Vorschau an
+# Rendert ein Chatverlauf-Item: Titel, Aktualisierungszeitpunkt, Buttons zum Laden/Anzeigen einer Vorschau
 def render_chat_history_item(conversation):
     conversation_id = conversation["id"]
     updated_at = format_datetime(conversation["updated_at"])
